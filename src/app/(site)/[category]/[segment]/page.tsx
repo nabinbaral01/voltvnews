@@ -247,7 +247,7 @@ export default async function CategorySegmentPage({ params, searchParams }: Prop
     },
     publisher: {
       '@type': 'Organization',
-      name: 'Volt V',
+      name: 'The Volt V',
       url: SITE_URL,
     },
     mainEntityOfPage: { '@type': 'WebPage', '@id': url },

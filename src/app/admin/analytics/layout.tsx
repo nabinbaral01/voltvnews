@@ -4,7 +4,7 @@ import { AnalyticsNav } from './analytics-nav';
 import { requireCapability } from '@/lib/permissions';
 
 export const metadata: Metadata = {
-  title: { default: 'Analytics', template: '%s · Analytics · Volt V' },
+  title: { default: 'Analytics', template: '%s · Analytics · The Volt V' },
 };
 
 export default async function AnalyticsLayout({ children }: { children: React.ReactNode }) {

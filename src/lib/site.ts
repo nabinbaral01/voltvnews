@@ -26,7 +26,7 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   'site.tagline': 'Screens, panels and controllers — covered properly.',
   'site.logo': '',
   'site.description':
-    'Volt V is an entertainment publication covering film, television, comics, gaming and anime.',
+    'The Volt V is an entertainment publication covering film, television, comics, gaming and anime.',
   'social.links': {},
   'homepage.modules': [
     'trending',

@@ -6,7 +6,7 @@ import { AdminUserMenu } from '@/components/admin/user-menu';
 import { CAPABILITIES, can, requireCapability, type Capability } from '@/lib/permissions';
 
 export const metadata: Metadata = {
-  title: { default: 'Admin', template: '%s · Volt V Admin' },
+  title: { default: 'Admin', template: '%s · The Volt V Admin' },
   robots: { index: false, follow: false },
 };
 

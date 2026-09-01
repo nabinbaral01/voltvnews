@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: category.name,
     description: category.description ?? `${category.name} coverage from Volt V.`,
     alternates: { canonical: `/${category.slug}` },
-    openGraph: { title: `${category.name} | Volt V`, type: 'website' },
+    openGraph: { title: `${category.name} | The Volt V`, type: 'website' },
   };
 }
 

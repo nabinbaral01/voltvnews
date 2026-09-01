@@ -28,7 +28,7 @@ export default async function AuthorsPage() {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    name: 'Volt V editorial team',
+    name: 'The Volt V editorial team',
     itemListElement: staff.map((person, index) => ({
       '@type': 'ListItem',
       position: index + 1,

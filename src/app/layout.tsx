@@ -23,14 +23,14 @@ const body = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Volt V — Screens, panels and controllers, covered properly',
-    template: '%s | Volt V',
+    default: 'The Volt V — Screens, panels and controllers, covered properly',
+    template: '%s | The Volt V',
   },
   description:
-    'Volt V is an entertainment publication covering film, television, comics, gaming and anime with reporting, reviews and rankings.',
+    'The Volt V is an entertainment publication covering film, television, comics, gaming and anime with reporting, reviews and rankings.',
   openGraph: {
     type: 'website',
-    siteName: 'Volt V',
+    siteName: 'The Volt V',
     locale: 'en_GB',
   },
   twitter: { card: 'summary_large_image', site: '@voltv' },

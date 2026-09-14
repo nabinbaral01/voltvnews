@@ -40,12 +40,17 @@ const SESSION_DIMENSIONS: { dimension: string; value: string; where?: string }[]
   { dimension: 'os', value: `vs."os"`, where: `vs."os" IS NOT NULL` },
 ];
 
+/**
+ * Bounds go to SQL as plain 'YYYY-MM-DD' strings and are cast there. A JS Date
+ * would arrive as a timestamp with a zone and get its date taken in the
+ * session's zone, which is only UTC by luck of the hosting; a date literal
+ * has no zone to get wrong. Days are UTC throughout, same as the dashboards.
+ */
 function dayBounds(range: RollupRange) {
-  const from = new Date(range.from);
-  from.setUTCHours(0, 0, 0, 0);
-  const to = new Date(range.to);
-  to.setUTCHours(23, 59, 59, 999);
-  return { from, to };
+  return {
+    from: range.from.toISOString().slice(0, 10),
+    to: range.to.toISOString().slice(0, 10),
+  };
 }
 
 export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
@@ -66,7 +71,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
          "totalDuration", "totalScroll", "scrollSamples", "newVisitors")
       SELECT
         gen_random_uuid()::text,
-        (pv."createdAt" AT TIME ZONE 'UTC')::date,
+        pv."createdAt"::date,
         '${dim.dimension}',
         ${dim.value},
         COUNT(*)::int,
@@ -78,7 +83,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
         COUNT(*) FILTER (WHERE pv."scrollDepthPercent" > 0)::int,
         COUNT(*) FILTER (WHERE pv."isNewVisitor")::int
       FROM "PageView" pv
-      WHERE pv."createdAt" >= $1 AND pv."createdAt" <= $2
+      WHERE pv."createdAt" >= $1::date AND pv."createdAt" < $2::date + 1
         ${dim.where ? `AND ${dim.where}` : ''}
       GROUP BY 2, 4
       ON CONFLICT ("day", "dimension", "value") DO UPDATE SET
@@ -102,7 +107,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
          "totalDuration", "totalScroll", "scrollSamples", "newVisitors")
       SELECT
         gen_random_uuid()::text,
-        (vs."startedAt" AT TIME ZONE 'UTC')::date,
+        vs."startedAt"::date,
         '${dim.dimension}',
         ${dim.value},
         0, 0,
@@ -110,7 +115,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
         COUNT(*) FILTER (WHERE vs."isBounce")::int,
         0, 0, 0, 0
       FROM "VisitSession" vs
-      WHERE vs."startedAt" >= $1 AND vs."startedAt" <= $2
+      WHERE vs."startedAt" >= $1::date AND vs."startedAt" < $2::date + 1
         ${dim.where ? `AND ${dim.where}` : ''}
       GROUP BY 2, 4
       ON CONFLICT ("day", "dimension", "value") DO UPDATE SET
@@ -135,7 +140,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
          "totalDuration", "totalScroll", "scrollSamples", "newVisitors")
       SELECT
         gen_random_uuid()::text,
-        (pv."createdAt" AT TIME ZONE 'UTC')::date,
+        pv."createdAt"::date,
         '${dimension}',
         p."${column}",
         COUNT(*)::int,
@@ -147,7 +152,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
         COUNT(*) FILTER (WHERE pv."isNewVisitor")::int
       FROM "PageView" pv
       JOIN "Post" p ON p."id" = pv."postId"
-      WHERE pv."createdAt" >= $1 AND pv."createdAt" <= $2
+      WHERE pv."createdAt" >= $1::date AND pv."createdAt" < $2::date + 1
       GROUP BY 2, 4
       ON CONFLICT ("day", "dimension", "value") DO UPDATE SET
         "pageViews" = "DailyMetric"."pageViews" + EXCLUDED."pageViews",
@@ -172,7 +177,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
        "totalDuration", "totalScroll", "scrollSamples", "newVisitors")
     SELECT
       gen_random_uuid()::text,
-      (pv."createdAt" AT TIME ZONE 'UTC')::date,
+      pv."createdAt"::date,
       'ageBucket',
       CASE
         WHEN age <= 17 THEN '13-17'
@@ -190,7 +195,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
       SELECT pv2.*, EXTRACT(YEAR FROM pv2."createdAt")::int - u."birthYear" AS age
       FROM "PageView" pv2
       JOIN "User" u ON u."id" = pv2."userId"
-      WHERE pv2."createdAt" >= $1 AND pv2."createdAt" <= $2 AND u."birthYear" IS NOT NULL
+      WHERE pv2."createdAt" >= $1::date AND pv2."createdAt" < $2::date + 1 AND u."birthYear" IS NOT NULL
     ) pv
     WHERE age BETWEEN 13 AND 110
     GROUP BY 2, 4
@@ -208,7 +213,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
        "totalDuration", "totalScroll", "scrollSamples", "newVisitors")
     SELECT
       gen_random_uuid()::text,
-      (pv."createdAt" AT TIME ZONE 'UTC')::date,
+      pv."createdAt"::date,
       'gender',
       u."gender"::text,
       COUNT(*)::int,
@@ -216,7 +221,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
       0, 0, 0, 0, 0, 0
     FROM "PageView" pv
     JOIN "User" u ON u."id" = pv."userId"
-    WHERE pv."createdAt" >= $1 AND pv."createdAt" <= $2 AND u."gender" IS NOT NULL
+    WHERE pv."createdAt" >= $1::date AND pv."createdAt" < $2::date + 1 AND u."gender" IS NOT NULL
     GROUP BY 2, 4
     ON CONFLICT ("day", "dimension", "value") DO UPDATE SET
       "pageViews" = "DailyMetric"."pageViews" + EXCLUDED."pageViews"
@@ -238,7 +243,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
          "totalDuration", "totalScroll", "scrollSamples", "newVisitors")
       SELECT
         gen_random_uuid()::text,
-        (pv."createdAt" AT TIME ZONE 'UTC')::date,
+        pv."createdAt"::date,
         'coverage',
         '${value}',
         COUNT(*)::int,
@@ -246,7 +251,7 @@ export async function rebuildRollups(prisma: PrismaClient, range: RollupRange) {
         0, 0, 0, 0, 0, 0
       FROM "PageView" pv
       LEFT JOIN "User" u ON u."id" = pv."userId"
-      WHERE pv."createdAt" >= $1 AND pv."createdAt" <= $2 AND ${where}
+      WHERE pv."createdAt" >= $1::date AND pv."createdAt" < $2::date + 1 AND ${where}
       GROUP BY 2, 4
       ON CONFLICT ("day", "dimension", "value") DO UPDATE SET
         "pageViews" = "DailyMetric"."pageViews" + EXCLUDED."pageViews"

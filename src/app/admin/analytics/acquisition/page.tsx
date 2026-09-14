@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 
 import { AcquisitionClient } from './acquisition-client';
 import { DateRangePicker } from '@/components/admin/date-range-picker';
+import { CoverageNote } from '@/components/admin/coverage-note';
 import { PageHeader } from '@/components/admin/page-header';
 import { getAcquisition, parseRange, RANGE_LABELS } from '@/lib/analytics-queries';
+import { refreshToday } from '@/lib/analytics-live';
 
 export const metadata: Metadata = { title: 'Acquisition' };
 export const dynamic = 'force-dynamic';
@@ -11,6 +13,7 @@ export const dynamic = 'force-dynamic';
 type Props = { searchParams: Promise<{ preset?: string; from?: string; to?: string }> };
 
 export default async function AcquisitionPage({ searchParams }: Props) {
+  await refreshToday();
   const range = parseRange(await searchParams);
   const { sources, referrers, campaigns } = await getAcquisition(range);
 
@@ -26,6 +29,7 @@ export default async function AcquisitionPage({ searchParams }: Props) {
           to={range.to.toISOString().slice(0, 10)}
         />
       </PageHeader>
+      <CoverageNote range={range} />
 
       <AcquisitionClient
         sources={sources.map((row) => ({

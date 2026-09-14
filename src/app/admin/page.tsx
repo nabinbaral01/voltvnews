@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { LiveCounter, SourceDonut, TrafficChart } from './dashboard-charts';
 import { DateRangePicker } from '@/components/admin/date-range-picker';
+import { CoverageNote } from '@/components/admin/coverage-note';
 import { PageHeader } from '@/components/admin/page-header';
 import { StatTile } from '@/components/admin/stat-tile';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ import {
   RANGE_LABELS,
   uniqueVisitors,
 } from '@/lib/analytics-queries';
+import { refreshToday } from '@/lib/analytics-live';
 import { can, requireCapability } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
 import { compactNumber, formatDuration, formatNumber, relativeTime } from '@/lib/utils';
@@ -41,6 +43,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
   const params = await searchParams;
   const range = parseRange(params);
   const showAnalytics = can(user.role, 'analytics.view');
+  if (showAnalytics) await refreshToday();
 
   // An AUTHOR gets the editorial half of this page and none of the numbers.
   const [postsThisWeek, myDrafts, pendingComments, recentPosts] = await Promise.all([
@@ -160,6 +163,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
           to={range.to.toISOString().slice(0, 10)}
         />
       </PageHeader>
+      <CoverageNote range={range} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile

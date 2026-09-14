@@ -14,7 +14,7 @@ export default async function RealtimePage() {
     <>
       <PageHeader
         title="Realtime"
-        description="The last five minutes, straight off the raw event table — the one view that cannot come from the nightly rollup."
+        description="The last five minutes, straight off the raw event table. Only readers who accepted analytics cookies appear here."
       />
       <RealtimeClient
         initial={{

@@ -115,6 +115,8 @@ function hitFilterFor(dimension: string, value: string): HitFilter | null {
 
 export type Totals = {
   pageViews: number;
+  /** Page views from readers who accepted analytics — the base of every other figure. */
+  sampledPageViews: number;
   visitors: number;
   sessions: number;
   bounces: number;
@@ -156,6 +158,7 @@ async function totalsFor(from: Date, to: Date): Promise<Totals> {
   const { sampledViews, sessions } = s;
   return {
     pageViews,
+    sampledPageViews: sampledViews,
     // Summed daily uniques. A visitor who reads on three days counts three
     // times here; `uniqueVisitors()` below is the exact figure when it matters.
     visitors: s.visitors,
@@ -175,6 +178,19 @@ export async function getTotals(range: DateRange) {
     totalsFor(range.previous.from, range.previous.to),
   ]);
   return { current, previous };
+}
+
+/**
+ * How much of the readership the consented figures describe: the share of all
+ * page views in the range that came with analytics cookies accepted.
+ */
+export async function getCoverage(range: DateRange) {
+  const { pageViews, sampledPageViews } = await totalsFor(range.from, range.to);
+  return {
+    all: pageViews,
+    sampled: sampledPageViews,
+    share: pageViews ? sampledPageViews / pageViews : 0,
+  };
 }
 
 /**

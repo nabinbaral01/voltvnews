@@ -2,10 +2,12 @@ import type { Metadata } from 'next';
 
 import { ContentClient } from './content-client';
 import { DateRangePicker } from '@/components/admin/date-range-picker';
+import { CoverageNote } from '@/components/admin/coverage-note';
 import { PageHeader } from '@/components/admin/page-header';
 import {
   getLabelledBreakdown, getTopPosts, parseRange, RANGE_LABELS,
 } from '@/lib/analytics-queries';
+import { refreshToday } from '@/lib/analytics-live';
 
 export const metadata: Metadata = { title: 'Content' };
 export const dynamic = 'force-dynamic';
@@ -13,6 +15,7 @@ export const dynamic = 'force-dynamic';
 type Props = { searchParams: Promise<{ preset?: string; from?: string; to?: string }> };
 
 export default async function ContentPage({ searchParams }: Props) {
+  await refreshToday();
   const range = parseRange(await searchParams);
 
   const [posts, authors, categories, contentTypes] = await Promise.all([
@@ -34,6 +37,7 @@ export default async function ContentPage({ searchParams }: Props) {
           to={range.to.toISOString().slice(0, 10)}
         />
       </PageHeader>
+      <CoverageNote range={range} />
 
       <ContentClient
         posts={posts}

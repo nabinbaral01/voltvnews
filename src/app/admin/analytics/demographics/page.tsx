@@ -2,11 +2,13 @@ import type { Metadata } from 'next';
 
 import { DemographicsClient } from './demographics-client';
 import { DateRangePicker } from '@/components/admin/date-range-picker';
+import { CoverageNote } from '@/components/admin/coverage-note';
 import { PageHeader } from '@/components/admin/page-header';
 import {
   getBreakdown, getDemographicCrosstab, getPanelDemographics, getSelfDeclared,
   getSurveyDemographics, parseRange, RANGE_LABELS,
 } from '@/lib/analytics-queries';
+import { refreshToday } from '@/lib/analytics-live';
 import { prisma } from '@/lib/prisma';
 
 export const metadata: Metadata = { title: 'Demographics' };
@@ -20,6 +22,7 @@ type Props = {
 
 export default async function DemographicsPage({ searchParams }: Props) {
   const params = await searchParams;
+  await refreshToday();
   const range = parseRange(params);
   const filtered = Boolean(params.categoryId || params.country);
 
@@ -58,6 +61,7 @@ export default async function DemographicsPage({ searchParams }: Props) {
           to={range.to.toISOString().slice(0, 10)}
         />
       </PageHeader>
+      <CoverageNote range={range} />
 
       <DemographicsClient
         age={age}

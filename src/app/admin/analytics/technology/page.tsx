@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 
 import { TechnologyClient } from './technology-client';
 import { DateRangePicker } from '@/components/admin/date-range-picker';
+import { CoverageNote } from '@/components/admin/coverage-note';
 import { PageHeader } from '@/components/admin/page-header';
 import { getTechnology, parseRange, RANGE_LABELS } from '@/lib/analytics-queries';
+import { refreshToday } from '@/lib/analytics-live';
 import { prisma } from '@/lib/prisma';
 
 export const metadata: Metadata = { title: 'Technology' };
@@ -22,6 +24,7 @@ const WIDTH_BUCKETS = [
 ];
 
 export default async function TechnologyPage({ searchParams }: Props) {
+  await refreshToday();
   const range = parseRange(await searchParams);
 
   const [tech, widths] = await Promise.all([
@@ -59,6 +62,7 @@ export default async function TechnologyPage({ searchParams }: Props) {
           to={range.to.toISOString().slice(0, 10)}
         />
       </PageHeader>
+      <CoverageNote range={range} />
 
       <TechnologyClient
         devices={tech.devices.map((row) => ({

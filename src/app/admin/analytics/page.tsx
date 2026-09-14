@@ -2,12 +2,14 @@ import type { Metadata } from 'next';
 
 import { OverviewCharts } from './overview-charts';
 import { DateRangePicker } from '@/components/admin/date-range-picker';
+import { CoverageNote } from '@/components/admin/coverage-note';
 import { PageHeader } from '@/components/admin/page-header';
 import { StatTile } from '@/components/admin/stat-tile';
 import {
   getNewVsReturning, getSeries, getSparklines, getTotals, parseRange, RANGE_LABELS,
   uniqueVisitors,
 } from '@/lib/analytics-queries';
+import { refreshToday } from '@/lib/analytics-live';
 import { compactNumber, formatDuration } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Overview' };
@@ -16,6 +18,7 @@ export const dynamic = 'force-dynamic';
 type Props = { searchParams: Promise<{ preset?: string; from?: string; to?: string }> };
 
 export default async function AnalyticsOverview({ searchParams }: Props) {
+  await refreshToday();
   const range = parseRange(await searchParams);
 
   const [{ current, previous }, series, comparison, sparks, uniques, newVsReturning] =
@@ -40,6 +43,7 @@ export default async function AnalyticsOverview({ searchParams }: Props) {
           to={range.to.toISOString().slice(0, 10)}
         />
       </PageHeader>
+      <CoverageNote range={range} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatTile

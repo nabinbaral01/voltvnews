@@ -101,9 +101,9 @@ export async function POST(request: NextRequest) {
     if (ua.deviceType !== 'BOT') {
       const { path } = parsed.data;
       const postId = await postIdFromPath(path);
-      // Days are UTC, the same clock the nightly rollup buckets by.
-      const day = new Date();
-      day.setUTCHours(0, 0, 0, 0);
+      // Days are UTC, the same clock the nightly rollup buckets by. Sent as a
+      // date literal so the database's own timezone never enters into it.
+      const day = new Date().toISOString().slice(0, 10);
       await Promise.all([
         // One upsert, done in SQL so two simultaneous hits cannot race on the
         // insert and lose one.

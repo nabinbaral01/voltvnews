@@ -12,8 +12,31 @@ const TARGETS = [
   { key: 'reddit', label: 'Reddit', href: (u: string, t: string) => `https://www.reddit.com/submit?url=${u}&title=${t}` },
 ];
 
-export function ShareButtons({ url, title }: { url: string; title: string }) {
+/**
+ * `url` is the canonical address the server knows. Once mounted, the share
+ * targets switch to the origin the reader is actually on: it is the address
+ * they see in their bar, and it cannot disagree with it — a misconfigured
+ * site URL once had "Copy link" handing out a vercel.app domain from a page
+ * served on thevoltv.com.
+ */
+function useReaderUrl(canonical: string): string {
+  return React.useSyncExternalStore(
+    () => () => {},
+    () => {
+      try {
+        const { pathname, search } = new URL(canonical, window.location.origin);
+        return new URL(pathname + search, window.location.origin).href;
+      } catch {
+        return canonical;
+      }
+    },
+    () => canonical,
+  );
+}
+
+export function ShareButtons({ url: canonical, title }: { url: string; title: string }) {
   const [copied, setCopied] = React.useState(false);
+  const url = useReaderUrl(canonical);
   const encodedUrl = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(title);
 

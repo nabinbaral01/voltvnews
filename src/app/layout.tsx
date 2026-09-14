@@ -20,6 +20,9 @@ const body = Inter({
   display: 'swap',
 });
 
+/** AdSense publisher id. Public by nature — it is in every page's HTML. */
+const ADSENSE_CLIENT = 'ca-pub-2712501023106459';
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -48,6 +51,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       data-scroll-behavior="smooth"
       className={`${headline.variable} ${body.variable}`}
     >
+      <head>
+        {/* A literal tag, not next/script: AdSense's site verification reads
+            the served HTML for exactly this element, and next/script emits
+            only a preload hint there and injects the script at runtime. */}
+        <script
+          async
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-screen bg-bg text-fg antialiased">
         <ThemeProvider>
           {children}

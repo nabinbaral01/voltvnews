@@ -36,6 +36,14 @@ async function viewCountOf(href: string): Promise<number> {
   return post.viewCount;
 }
 
+/** Today's tally for a path — what the traffic chart reads. */
+async function todaysHitsFor(path: string): Promise<number> {
+  const day = new Date();
+  day.setUTCHours(0, 0, 0, 0);
+  const row = await prisma.dailyHit.findUnique({ where: { day_path: { day, path } } });
+  return row?.views ?? 0;
+}
+
 function collectTrackTypes(page: Page): string[] {
   const types: string[] = [];
   page.on('request', (request) => {
@@ -50,13 +58,14 @@ test.describe('analytics tracking', () => {
 
   test('a visit counts without consent, but sends nothing else', async ({ page }) => {
     const href = await firstArticleHref(page);
-    const before = await viewCountOf(href);
+    const [before, hitsBefore] = await Promise.all([viewCountOf(href), todaysHitsFor(href)]);
     const types = collectTrackTypes(page);
 
     await page.goto(href);
     await expect
       .poll(() => viewCountOf(href), { message: 'the view counter runs without consent' })
       .toBe(before + 1);
+    expect(await todaysHitsFor(href), "today's tally feeds the traffic chart").toBe(hitsBefore + 1);
 
     await page.waitForTimeout(1500);
     expect(types, 'the analytics beacon must not fire until cookies are accepted').not.toContain(

@@ -7,6 +7,13 @@ import { prisma } from './prisma';
  * `PageView` table. Raw events are used in exactly three places, each marked
  * below: realtime (last 5 minutes), demographic cross-tabs, and geo drill-down
  * beyond the pre-aggregated dimensions.
+ *
+ * "Page views" is the exception to the rollup: it comes from `DailyHit`, the
+ * live, consent-free tally, so it covers every reader and includes today.
+ * Visitors, sessions, bounces and engagement need a visitor identity, which
+ * only consenting readers provide, so those stay on the rollup — and every
+ * ratio (time per view, pages per session) is computed over the same
+ * consented views it was measured on, never the tally.
  */
 
 const DAY = 86_400_000;
@@ -73,6 +80,37 @@ export const RANGE_LABELS: Record<RangePreset, string> = {
   custom: 'Custom',
 };
 
+// ---------------------------------------------------------------- hits
+
+type HitFilter = { postId?: string; path?: string };
+
+/** Tally views per day (ISO date → views), optionally for one post or path. */
+async function hitsByDay(from: Date, to: Date, filter: HitFilter = {}): Promise<Map<string, number>> {
+  const rows = await prisma.dailyHit.groupBy({
+    by: ['day'],
+    where: { day: { gte: from, lte: to }, ...filter },
+    _sum: { views: true },
+  });
+  return new Map(rows.map((r) => [r.day.toISOString().slice(0, 10), r._sum.views ?? 0]));
+}
+
+/**
+ * Days before the tally existed have no hit rows, so the consented count is
+ * the best figure for them. Every consented view is also a hit, so taking the
+ * larger of the two never double-counts.
+ */
+function bestViews(hits: number | undefined, sampled: number): number {
+  return Math.max(hits ?? 0, sampled);
+}
+
+/** The tally is only kept by day and by page; other dimensions have none. */
+function hitFilterFor(dimension: string, value: string): HitFilter | null {
+  if (dimension === 'total') return {};
+  if (dimension === 'post') return { postId: value };
+  if (dimension === 'path') return { path: value };
+  return null;
+}
+
 // ---------------------------------------------------------------- totals
 
 export type Totals = {
@@ -88,36 +126,46 @@ export type Totals = {
 };
 
 async function totalsFor(from: Date, to: Date): Promise<Totals> {
-  const agg = await prisma.dailyMetric.aggregate({
-    where: { dimension: 'total', day: { gte: from, lte: to } },
-    _sum: {
-      pageViews: true,
-      visitors: true,
-      sessions: true,
-      bounces: true,
-      totalDuration: true,
-      totalScroll: true,
-      scrollSamples: true,
-      newVisitors: true,
-    },
-  });
+  const [rows, hits] = await Promise.all([
+    prisma.dailyMetric.findMany({ where: { dimension: 'total', day: { gte: from, lte: to } } }),
+    hitsByDay(from, to),
+  ]);
 
-  const s = agg._sum;
-  const pageViews = s.pageViews ?? 0;
-  const sessions = s.sessions ?? 0;
+  const s = {
+    sampledViews: 0, visitors: 0, sessions: 0, bounces: 0,
+    totalDuration: 0, totalScroll: 0, scrollSamples: 0, newVisitors: 0,
+  };
+  const sampledByDay = new Map<string, number>();
+  for (const r of rows) {
+    sampledByDay.set(r.day.toISOString().slice(0, 10), r.pageViews);
+    s.sampledViews += r.pageViews;
+    s.visitors += r.visitors;
+    s.sessions += r.sessions;
+    s.bounces += r.bounces;
+    s.totalDuration += r.totalDuration;
+    s.totalScroll += r.totalScroll;
+    s.scrollSamples += r.scrollSamples;
+    s.newVisitors += r.newVisitors;
+  }
 
+  let pageViews = 0;
+  for (const day of new Set([...sampledByDay.keys(), ...hits.keys()])) {
+    pageViews += bestViews(hits.get(day), sampledByDay.get(day) ?? 0);
+  }
+
+  const { sampledViews, sessions } = s;
   return {
     pageViews,
     // Summed daily uniques. A visitor who reads on three days counts three
     // times here; `uniqueVisitors()` below is the exact figure when it matters.
-    visitors: s.visitors ?? 0,
+    visitors: s.visitors,
     sessions,
-    bounces: s.bounces ?? 0,
-    bounceRate: sessions ? (s.bounces ?? 0) / sessions : 0,
-    avgDurationSeconds: pageViews ? (s.totalDuration ?? 0) / pageViews : 0,
-    pagesPerSession: sessions ? pageViews / sessions : 0,
-    avgScrollPercent: s.scrollSamples ? (s.totalScroll ?? 0) / s.scrollSamples : 0,
-    newVisitors: s.newVisitors ?? 0,
+    bounces: s.bounces,
+    bounceRate: sessions ? s.bounces / sessions : 0,
+    avgDurationSeconds: sampledViews ? s.totalDuration / sampledViews : 0,
+    pagesPerSession: sessions ? sampledViews / sessions : 0,
+    avgScrollPercent: s.scrollSamples ? s.totalScroll / s.scrollSamples : 0,
+    newVisitors: s.newVisitors,
   };
 }
 
@@ -161,10 +209,14 @@ export async function getSeries(
   dimension = 'total',
   value = 'all',
 ): Promise<SeriesPoint[]> {
-  const rows = await prisma.dailyMetric.findMany({
-    where: { dimension, value, day: { gte: range.from, lte: range.to } },
-    orderBy: { day: 'asc' },
-  });
+  const filter = hitFilterFor(dimension, value);
+  const [rows, hits] = await Promise.all([
+    prisma.dailyMetric.findMany({
+      where: { dimension, value, day: { gte: range.from, lte: range.to } },
+      orderBy: { day: 'asc' },
+    }),
+    filter ? hitsByDay(range.from, range.to, filter) : new Map<string, number>(),
+  ]);
 
   const byDay = new Map(rows.map((r) => [r.day.toISOString().slice(0, 10), r]));
   const out: SeriesPoint[] = [];
@@ -174,7 +226,7 @@ export async function getSeries(
     const row = byDay.get(key);
     out.push({
       day: key,
-      pageViews: row?.pageViews ?? 0,
+      pageViews: bestViews(hits.get(key), row?.pageViews ?? 0),
       visitors: row?.visitors ?? 0,
       sessions: row?.sessions ?? 0,
       bounces: row?.bounces ?? 0,
@@ -313,19 +365,34 @@ export type PostPerformance = {
 };
 
 export async function getTopPosts(range: DateRange, limit = 10): Promise<PostPerformance[]> {
-  const rows = await prisma.dailyMetric.groupBy({
-    by: ['value'],
-    where: { dimension: 'post', day: { gte: range.from, lte: range.to } },
-    _sum: {
-      pageViews: true,
-      visitors: true,
-      totalDuration: true,
-      totalScroll: true,
-      scrollSamples: true,
-    },
-    orderBy: { _sum: { pageViews: 'desc' } },
-    take: limit,
-  });
+  const day = { gte: range.from, lte: range.to };
+  const [hitRows, metricRows] = await Promise.all([
+    prisma.dailyHit.groupBy({
+      by: ['postId'],
+      where: { postId: { not: null }, day },
+      _sum: { views: true },
+    }),
+    prisma.dailyMetric.groupBy({
+      by: ['value'],
+      where: { dimension: 'post', day },
+      _sum: {
+        pageViews: true,
+        visitors: true,
+        totalDuration: true,
+        totalScroll: true,
+        scrollSamples: true,
+      },
+    }),
+  ]);
+
+  // Rank by the tally; a post only the rollup knows about (pre-tally days)
+  // still ranks on its consented views.
+  const sampled = new Map(metricRows.map((r) => [r.value, r._sum]));
+  const hits = new Map(hitRows.map((r) => [r.postId as string, r._sum.views ?? 0]));
+  const rows = [...new Set([...sampled.keys(), ...hits.keys()])]
+    .map((id) => ({ value: id, views: bestViews(hits.get(id), sampled.get(id)?.pageViews ?? 0) }))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, limit);
 
   if (!rows.length) return [];
 
@@ -347,7 +414,8 @@ export async function getTopPosts(range: DateRange, limit = 10): Promise<PostPer
     .map((row) => {
       const post = byId.get(row.value);
       if (!post) return null;
-      const pageViews = row._sum.pageViews ?? 0;
+      const s = sampled.get(row.value);
+      const sampledViews = s?.pageViews ?? 0;
       return {
         id: post.id,
         title: post.title,
@@ -356,12 +424,10 @@ export async function getTopPosts(range: DateRange, limit = 10): Promise<PostPer
         categorySlug: post.category.slug,
         contentTypeName: post.contentType.name,
         authorName: post.author.name,
-        pageViews,
-        visitors: row._sum.visitors ?? 0,
-        avgDurationSeconds: pageViews ? (row._sum.totalDuration ?? 0) / pageViews : 0,
-        avgScrollPercent: row._sum.scrollSamples
-          ? (row._sum.totalScroll ?? 0) / row._sum.scrollSamples
-          : 0,
+        pageViews: row.views,
+        visitors: s?.visitors ?? 0,
+        avgDurationSeconds: sampledViews ? (s?.totalDuration ?? 0) / sampledViews : 0,
+        avgScrollPercent: s?.scrollSamples ? (s.totalScroll ?? 0) / s.scrollSamples : 0,
         comments: post._count.comments,
       };
     })

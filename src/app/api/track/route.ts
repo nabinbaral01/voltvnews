@@ -99,12 +99,25 @@ export async function POST(request: NextRequest) {
   if (parsed.data.type === 'hit') {
     const ua = parseUserAgent(request.headers.get('user-agent'));
     if (ua.deviceType !== 'BOT') {
-      const postId = await postIdFromPath(parsed.data.path);
-      if (postId) {
-        await prisma.post
-          .update({ where: { id: postId }, data: { viewCount: { increment: 1 } } })
-          .catch(() => null);
-      }
+      const { path } = parsed.data;
+      const postId = await postIdFromPath(path);
+      // Days are UTC, the same clock the nightly rollup buckets by.
+      const day = new Date();
+      day.setUTCHours(0, 0, 0, 0);
+      await Promise.all([
+        // One upsert, done in SQL so two simultaneous hits cannot race on the
+        // insert and lose one.
+        prisma.$executeRaw`
+          INSERT INTO "DailyHit" ("day", "path", "postId", "views")
+          VALUES (${day}::date, ${path}, ${postId}, 1)
+          ON CONFLICT ("day", "path") DO UPDATE SET "views" = "DailyHit"."views" + 1
+        `.catch(() => null),
+        postId
+          ? prisma.post
+              .update({ where: { id: postId }, data: { viewCount: { increment: 1 } } })
+              .catch(() => null)
+          : null,
+      ]);
     }
     return new NextResponse(null, { status: 204 });
   }

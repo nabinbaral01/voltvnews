@@ -28,7 +28,7 @@ export function OverviewCharts({
       <div className="xl:col-span-2">
         <ChartFrame
           title="Traffic over time"
-          description={`${rangeLabel}, with the previous period overlaid`}
+          description={`${rangeLabel}, with the previous period overlaid. Page views count every reader and update live; visitors, sessions and engagement come from readers who accepted analytics cookies.`}
           csvName="volt-analytics-overview"
           columns={[
             { key: 'day', label: 'Day' },

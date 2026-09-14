@@ -487,6 +487,22 @@ model DailyMetric {
   @@index([day])
 }
 
+/// Live, consent-free view tally: one row per (day, path), bumped on every
+/// hit. Stores nothing about the reader, so it runs for everyone — this is
+/// what the dashboards mean by "page views". Anything that needs a visitor
+/// identity (visitors, sessions, bounces, engagement) still comes from the
+/// consented rollup in DailyMetric.
+model DailyHit {
+  day    DateTime @db.Date
+  path   String
+  postId String?
+  views  Int      @default(0)
+
+  @@id([day, path])
+  @@index([day])
+  @@index([postId, day])
+}
+
 /// Optional one-question on-site poll. A *projected* demographic source,
 /// always reported with its sample size, never as a census.
 model SurveyResponse {

@@ -31,6 +31,16 @@ const pageviewSchema = z.object({
   screenWidth: z.number().int().min(0).max(10_000).nullish(),
 });
 
+/**
+ * A bare tally for the article's view counter: no row, no cookie, nothing that
+ * identifies anyone, so it needs no consent and ignores DNT. Bots still don't
+ * count.
+ */
+const hitSchema = z.object({
+  type: z.literal('hit'),
+  path: z.string().min(1).max(512),
+});
+
 const engagementSchema = z.object({
   type: z.literal('engagement'),
   id: z.string().min(1).max(64),
@@ -38,7 +48,7 @@ const engagementSchema = z.object({
   scroll: z.number().int().min(0).max(100),
 });
 
-const payloadSchema = z.discriminatedUnion('type', [pageviewSchema, engagementSchema]);
+const payloadSchema = z.discriminatedUnion('type', [hitSchema, pageviewSchema, engagementSchema]);
 
 /** Consent is enforced server-side too — the client check is a courtesy. */
 function hasAnalyticsConsent(request: NextRequest): boolean {
@@ -51,16 +61,25 @@ function hasAnalyticsConsent(request: NextRequest): boolean {
   }
 }
 
+/**
+ * Article attribution is resolved from the path server-side, so the client
+ * never has to know a post id and can't claim one it did not visit.
+ */
+async function postIdFromPath(path: string): Promise<string | null> {
+  const match = path.match(/^\/[a-z0-9-]+\/([a-z0-9-]+)\/?$/);
+  if (!match) return null;
+  const post = await prisma.post.findUnique({
+    where: { slug: match[1], deletedAt: null },
+    select: { id: true },
+  });
+  return post?.id ?? null;
+}
+
 function refusesTracking(request: NextRequest): boolean {
   return request.headers.get('dnt') === '1' || request.headers.get('sec-gpc') === '1';
 }
 
 export async function POST(request: NextRequest) {
-  if (refusesTracking(request) || !hasAnalyticsConsent(request)) {
-    // 204: the beacon succeeded from the client's point of view, nothing stored.
-    return new NextResponse(null, { status: 204 });
-  }
-
   const ipHash = hash(clientIp(request.headers));
   const limit = rateLimit(`track:${ipHash}`, 120, 60);
   if (!limit.ok) return tooManyRequests(limit);
@@ -77,6 +96,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
 
+  if (parsed.data.type === 'hit') {
+    const ua = parseUserAgent(request.headers.get('user-agent'));
+    if (ua.deviceType !== 'BOT') {
+      const postId = await postIdFromPath(parsed.data.path);
+      if (postId) {
+        await prisma.post
+          .update({ where: { id: postId }, data: { viewCount: { increment: 1 } } })
+          .catch(() => null);
+      }
+    }
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // Everything below stores something about the visitor, so it is consent-gated.
+  if (refusesTracking(request) || !hasAnalyticsConsent(request)) {
+    // 204: the beacon succeeded from the client's point of view, nothing stored.
+    return new NextResponse(null, { status: 204 });
+  }
+
   if (parsed.data.type === 'engagement') {
     const { id, seconds, scroll } = parsed.data;
     await prisma.pageView
@@ -90,19 +128,7 @@ export async function POST(request: NextRequest) {
 
   const data = parsed.data;
 
-  // Article attribution is resolved from the path server-side, so the client
-  // never has to know a post id and can't claim one it did not visit.
-  let postId = data.postId ?? null;
-  if (!postId) {
-    const match = data.path.match(/^\/[a-z0-9-]+\/([a-z0-9-]+)\/?$/);
-    if (match) {
-      const post = await prisma.post.findUnique({
-        where: { slug: match[1], deletedAt: null },
-        select: { id: true },
-      });
-      postId = post?.id ?? null;
-    }
-  }
+  const postId = data.postId ?? (await postIdFromPath(data.path));
 
   const ua = parseUserAgent(request.headers.get('user-agent'));
   if (ua.deviceType === 'BOT') return new NextResponse(null, { status: 204 });
@@ -198,12 +224,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (postId) {
-    await prisma.post
-      .update({ where: { id: postId }, data: { viewCount: { increment: 1 } } })
-      .catch(() => null);
-  }
-
+  // viewCount is not touched here: the consent-free hit already counted it.
   const response = NextResponse.json({ id: view.id });
   const secure = process.env.NODE_ENV === 'production';
 

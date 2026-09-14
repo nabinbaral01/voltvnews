@@ -27,8 +27,13 @@ export default function PrivacyPage() {
           <li>We never store your IP address. It is hashed with a secret salt on arrival.</li>
           <li>Analytics cookies are off until you accept them. Essential cookies always run.</li>
           <li>
+            Every article keeps a plain view counter that goes up by one per visit. It stores
+            nothing about you — no cookie, no address, no row — so it runs without consent.
+          </li>
+          <li>
             We honour Do Not Track and Global Privacy Control automatically — if your browser sends
-            either, nothing is recorded and you are never shown the banner.
+            either, nothing about you is recorded and you are never shown the banner. Only the
+            counter above moves.
           </li>
           <li>Age and gender come only from what readers volunteer. We never infer them.</li>
         </ul>
@@ -70,6 +75,11 @@ export default function PrivacyPage() {
         </table>
 
         <h2>What we record when you read an article</h2>
+        <p>
+          Without consent, one thing: the article&apos;s view counter increases by one. That
+          number is not linked to a visitor, a cookie or an address, and there is no per-visit
+          record behind it.
+        </p>
         <p>
           With analytics consent, each page view stores: the path, the referring site, any UTM
           campaign parameters, an approximate location derived from your IP (country, region,

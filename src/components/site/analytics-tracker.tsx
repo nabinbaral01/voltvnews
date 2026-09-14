@@ -3,15 +3,22 @@
 import { usePathname, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
-import { analyticsAllowed } from '@/lib/consent';
+import { CONSENT_EVENT, analyticsAllowed, type ConsentState } from '@/lib/consent';
 
 /**
  * First-party page-view beacon.
  *
- * Fires once per route change, then sends a single engagement update (time on
- * page + max scroll depth) when the page is hidden. No third-party script, no
- * cross-site identifier: the server sets a first-party visitor cookie and only
- * ever stores a salted hash of it.
+ * Two things leave the browser per route change. A "hit" is a bare tally for
+ * the article's view counter and carries only the path, so it is sent for
+ * everyone. The "pageview" is the analytics row proper (referrer, device,
+ * session) and goes only with consent, followed by a single engagement update
+ * (time on page + max scroll depth) when the page is hidden. No third-party
+ * script, no cross-site identifier: the server sets a first-party visitor
+ * cookie and only ever stores a salted hash of it.
+ *
+ * Without consent the pageview waits rather than giving up: the first page a
+ * visitor lands on is exactly where they answer the banner, and it would
+ * otherwise never be recorded even after they accept.
  */
 function Beacon({ postId }: { postId?: string | null }) {
   const pathname = usePathname();
@@ -22,12 +29,14 @@ function Beacon({ postId }: { postId?: string | null }) {
   const startedRef = React.useRef(0);
   const scrollRef = React.useRef(0);
   const sentRef = React.useRef(false);
+  // Last path the tally was sent for. The effect can re-run without a real
+  // navigation (a search-param change, StrictMode's dev double-invoke) and
+  // that is not a second view.
+  const hitRef = React.useRef<string | null>(null);
 
   const search = searchParams.toString();
 
   React.useEffect(() => {
-    if (!analyticsAllowed()) return;
-
     viewIdRef.current = null;
     startedRef.current = Date.now();
     scrollRef.current = 0;
@@ -35,29 +44,6 @@ function Beacon({ postId }: { postId?: string | null }) {
 
     const params = new URLSearchParams(search);
     const controller = new AbortController();
-
-    void fetch('/api/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        type: 'pageview',
-        path: pathname,
-        postId: postId ?? null,
-        referrer: document.referrer || null,
-        utmSource: params.get('utm_source'),
-        utmMedium: params.get('utm_medium'),
-        utmCampaign: params.get('utm_campaign'),
-        screenWidth: window.innerWidth,
-      }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.id) viewIdRef.current = data.id;
-      })
-      .catch(() => {
-        /* tracking must never break the page */
-      });
 
     const onScroll = () => {
       const doc = document.documentElement;
@@ -81,14 +67,69 @@ function Beacon({ postId }: { postId?: string | null }) {
 
     const onVisibility = () => document.visibilityState === 'hidden' && flush();
 
+    const send = () => {
+      void fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          type: 'pageview',
+          path: pathname,
+          postId: postId ?? null,
+          referrer: document.referrer || null,
+          utmSource: params.get('utm_source'),
+          utmMedium: params.get('utm_medium'),
+          utmCampaign: params.get('utm_campaign'),
+          screenWidth: window.innerWidth,
+        }),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.id) viewIdRef.current = data.id;
+        })
+        .catch(() => {
+          /* tracking must never break the page */
+        });
+    };
+
+    // The view counter is a bare tally — no row, no cookie — so it goes up for
+    // everyone, consent or not. sendBeacon so a bounce inside the first second
+    // still counts; fetch keepalive is the fallback where beacons are absent.
+    if (hitRef.current !== pathname) {
+      hitRef.current = pathname;
+      const hit = JSON.stringify({ type: 'hit', path: pathname });
+      if (!navigator.sendBeacon?.('/api/track', new Blob([hit], { type: 'application/json' }))) {
+        void fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: hit,
+          keepalive: true,
+        }).catch(() => {
+          /* tracking must never break the page */
+        });
+      }
+    }
+
+    // Scroll depth is measured from the start either way, so a late "accept"
+    // still reports how far the visitor actually read.
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', flush);
 
+    const onConsent = (event: Event) => {
+      if ((event as CustomEvent<ConsentState>).detail?.value !== 'all') return;
+      window.removeEventListener(CONSENT_EVENT, onConsent);
+      send();
+    };
+
+    if (analyticsAllowed()) send();
+    else window.addEventListener(CONSENT_EVENT, onConsent);
+
     return () => {
       flush();
       controller.abort();
+      window.removeEventListener(CONSENT_EVENT, onConsent);
       window.removeEventListener('scroll', onScroll);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', flush);

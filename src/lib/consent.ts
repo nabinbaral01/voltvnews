@@ -2,6 +2,8 @@
 
 export const CONSENT_COOKIE = 'volt_consent';
 export const CONSENT_VERSION = 1;
+/** Dispatched on window whenever writeConsent runs, so beacons can start late. */
+export const CONSENT_EVENT = 'volt:consent';
 
 export type ConsentValue = 'essential' | 'all';
 
@@ -44,7 +46,7 @@ export function writeConsent(value: ConsentValue) {
   const state: ConsentState = { value, version: CONSENT_VERSION, at: new Date().toISOString() };
   const maxAge = 60 * 60 * 24 * 180;
   document.cookie = `${CONSENT_COOKIE}=${encodeURIComponent(JSON.stringify(state))}; path=/; max-age=${maxAge}; samesite=lax`;
-  window.dispatchEvent(new CustomEvent('volt:consent', { detail: state }));
+  window.dispatchEvent(new CustomEvent<ConsentState>(CONSENT_EVENT, { detail: state }));
 }
 
 export function analyticsAllowed(): boolean {

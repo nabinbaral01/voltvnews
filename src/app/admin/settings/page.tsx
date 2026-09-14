@@ -36,7 +36,6 @@ export default async function SettingsPage() {
           logo: settings['site.logo'],
           social: settings['social.links'],
           homepageModules: settings['homepage.modules'],
-          adSlots: settings['homepage.adSlots'],
           footerColumns: settings['footer.columns'],
         }}
         categories={categories}

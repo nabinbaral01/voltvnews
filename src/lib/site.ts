@@ -17,7 +17,6 @@ export type SiteSettings = {
   'site.description': string;
   'social.links': Record<string, string>;
   'homepage.modules': string[];
-  'homepage.adSlots': { betweenSections: boolean; sidebar: boolean; inArticle: boolean };
   'footer.columns': FooterColumn[];
 };
 
@@ -39,7 +38,6 @@ export const DEFAULT_SETTINGS: SiteSettings = {
     'mixed-feed',
     'newsletter',
   ],
-  'homepage.adSlots': { betweenSections: true, sidebar: true, inArticle: true },
   'footer.columns': [],
 };
 

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 
 import { saveSettingsAction, type SettingsState } from './actions';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Switch, Textarea } from '@/components/ui/field';
+import { Field, Input, Textarea } from '@/components/ui/field';
 import { Card, CardHeader } from '@/components/ui/surface';
 
 export type SettingsPayload = {
@@ -17,7 +17,6 @@ export type SettingsPayload = {
   logo: string;
   social: Record<string, string>;
   homepageModules: string[];
-  adSlots: { betweenSections: boolean; sidebar: boolean; inArticle: boolean };
   footerColumns: { heading: string; links: { label: string; href: string }[] }[];
 };
 
@@ -208,27 +207,6 @@ export function SettingsClient({
           </div>
         </Card>
 
-        <Card>
-          <CardHeader title="Ad slots" description="Placeholder positions on the public site." />
-          <div className="space-y-3 p-4">
-            {(
-              [
-                ['betweenSections', 'Between homepage sections'],
-                ['sidebar', 'Homepage sidebar'],
-                ['inArticle', 'Inside articles'],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="flex items-center justify-between gap-3 text-sm">
-                {label}
-                <Switch
-                  checked={draft.adSlots[key]}
-                  onCheckedChange={(checked) => set('adSlots', { ...draft.adSlots, [key]: checked })}
-                  aria-label={label}
-                />
-              </label>
-            ))}
-          </div>
-        </Card>
       </div>
 
       <Card>

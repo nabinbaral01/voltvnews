@@ -19,18 +19,6 @@ import { getSettings } from '@/lib/site';
 // two minutes — never per request.
 export const revalidate = 120;
 
-function AdSlot({ label = 'Advertisement' }: { label?: string }) {
-  return (
-    <div
-      className="my-8 grid h-24 place-items-center rounded-card border border-dashed border-border bg-surface text-[11px] uppercase tracking-widest text-muted"
-      role="complementary"
-      aria-label={label}
-    >
-      {label}
-    </div>
-  );
-}
-
 async function CategoryBlock({ slug }: { slug: string }) {
   const block = await getCategoryBlock(slug, 4);
   if (!block) return null;
@@ -78,7 +66,6 @@ export default async function HomePage() {
   ]);
 
   const modules = settings['homepage.modules'] ?? [];
-  const adSlots = settings['homepage.adSlots'] ?? { betweenSections: true, sidebar: true, inArticle: true };
   const [feed, mostRead] = await Promise.all([getMixedFeed(0, 16), getMostRead(6)]);
 
   const categoryModules = modules.filter((m) => m.startsWith('category:'));
@@ -128,15 +115,11 @@ export default async function HomePage() {
           </section>
         ) : null}
 
-        {adSlots.betweenSections ? <AdSlot /> : null}
-
         {orderedCategories.slice(0, 3).map((slug) => (
           <CategoryBlock key={slug} slug={slug} />
         ))}
 
         {modules.includes('editors-picks') ? <EditorPicks /> : null}
-
-        {adSlots.betweenSections ? <AdSlot label="Advertisement" /> : null}
 
         {orderedCategories.slice(3).map((slug) => (
           <CategoryBlock key={slug} slug={slug} />
@@ -155,7 +138,6 @@ export default async function HomePage() {
             {mostRead.map((post) => (
               <TextRow key={post.id} post={post} />
             ))}
-            {adSlots.sidebar ? <AdSlot label="Sponsored" /> : null}
             <SectionHeading title="Just In" />
             {feed.slice(10, 16).map((post) => (
               <TextRow key={post.id} post={post} />

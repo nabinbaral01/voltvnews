@@ -176,11 +176,6 @@ export const settingsSchema = z.object({
   logo: z.string().max(500).optional().or(z.literal('')),
   social: z.record(z.string(), z.string().max(300)),
   homepageModules: z.array(z.string().max(60)),
-  adSlots: z.object({
-    betweenSections: z.boolean(),
-    sidebar: z.boolean(),
-    inArticle: z.boolean(),
-  }),
   footerColumns: z.array(
     z.object({
       heading: z.string().max(60),

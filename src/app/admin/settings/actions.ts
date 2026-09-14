@@ -48,7 +48,6 @@ export async function saveSettingsAction(
     ['site.logo', data.logo ?? ''],
     ['social.links', data.social],
     ['homepage.modules', data.homepageModules],
-    ['homepage.adSlots', data.adSlots],
     ['footer.columns', data.footerColumns],
   ];
 
